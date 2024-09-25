@@ -2,3 +2,8 @@ spring:
   data:
     mongodb:
       uri: mongodb://user:pwd@localhost:27017/example_db?authSource=admin
+
+logging:
+  level:
+    org.springframework.data.mongodb.core.ReactiveMongoTemplate: DEBUG
+    org.springframework.data.mongodb.core.MongoTemplate: DEBUG

@@ -1,0 +1,22 @@
+version: "3.5"
+
+services:
+  mongo:
+    image: mongo:6
+    container_name: mongo-sb
+    ports:
+      - "27017:27017"
+    volumes:
+      - './data/mongo:/data/db'
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: root
+      MONGO_INITDB_ROOT_PASSWORD: root
+      MONGO_INITDB_DATABASE: admin
+
+  mongo-initialization:
+    image: mongo:4.4.2
+    container_name: mongo-initialization-sb
+    depends_on:
+      - mongo
+    restart: "no"
+    entrypoint: [ "bash", "-c", "sleep 15 && mongo -u root -p root --host mongo:27017 --eval 'db.getSiblingDB(\"admin\").createUser({user: \"user\", pwd: \"pwd\", roles: [{role: \"readWrite\", db: \"example_db\"}]})'" ]
