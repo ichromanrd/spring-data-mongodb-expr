@@ -6,8 +6,11 @@ import com.ichromanrd.expr.model.BalanceCache
 import kotlinx.coroutines.reactor.awaitSingle
 import org.springframework.data.mongodb.core.FindAndModifyOptions
 import org.springframework.data.mongodb.core.ReactiveMongoTemplate
+import org.springframework.data.mongodb.core.aggregation.AggregationExpression
 import org.springframework.data.mongodb.core.aggregation.AggregationUpdate
+import org.springframework.data.mongodb.core.aggregation.BooleanOperators.And
 import org.springframework.data.mongodb.core.aggregation.ComparisonOperators.Lt
+import org.springframework.data.mongodb.core.aggregation.ComparisonOperators.Lte
 import org.springframework.data.mongodb.core.aggregation.ConditionalOperators
 import org.springframework.data.mongodb.core.aggregation.ConvertOperators.ToLong
 import org.springframework.data.mongodb.core.aggregation.SetOperation
@@ -15,7 +18,7 @@ import org.springframework.data.mongodb.core.query.Criteria
 import org.springframework.data.mongodb.core.query.Query
 import org.springframework.stereotype.Repository
 import java.time.Instant
-import java.util.Date
+import java.util.*
 
 @Repository
 class BalanceCacheRepository(
@@ -26,34 +29,33 @@ class BalanceCacheRepository(
         private val upsertAndReturnNew = FindAndModifyOptions.options().upsert(true).returnNew(true)
     }
 
-    private fun composeCondition(condition: Criteria, fieldName: String, valueToSet: Any): ConditionalOperators.Cond {
+    private fun composeCondition(condition: AggregationExpression, fieldName: String, valueToSet: Any): ConditionalOperators.Cond {
         return ConditionalOperators
             .`when`(condition)
             .then(valueToSet)
             .otherwiseValueOf(fieldName)
     }
 
-    private fun modifySet(condition: Criteria, setOperation: SetOperation, fieldName: String, valueToSet: Any): SetOperation {
+    private fun modifySet(condition: AggregationExpression, setOperation: SetOperation, fieldName: String, valueToSet: Any): SetOperation {
         return setOperation.set(
             fieldName,
             composeCondition(condition, fieldName, valueToSet)
         )
     }
 
-    private fun getUpdateConditions(eventDate: Date, lastTransactionId: String? = null): Criteria {
-        val criteriaList = mutableListOf(
-            Criteria.where(BalanceCache::eventDate.name).lte(eventDate)
+    private fun getUpdateConditions(eventDate: Date, lastTransactionId: String? = null): AggregationExpression {
+        val criteriaList: MutableList<AggregationExpression> = mutableListOf(
+            Lte.valueOf(BalanceCache::eventDate.name).lessThanEqualToValue(eventDate),
         )
 
-        lastTransactionId?.toLongOrNull()?.let { numericalLastTransactionId ->
-            val comp = Lt.valueOf(
-                ToLong.toLong("\$${BalanceCache::lastTransactionId.name}")
-            ).lessThanValue(numericalLastTransactionId)
-            val expr = Criteria.expr(comp)
+        lastTransactionId?.toLongOrNull()?.let { lastTrxIdNumerical ->
+            val expr = Lt.valueOf(
+                ToLong.toLong("\$${BalanceCache::lastTransactionId.name}"),
+            ).lessThanValue(lastTrxIdNumerical)
             criteriaList.add(expr)
         }
 
-        return Criteria().andOperator(*criteriaList.toTypedArray())
+        return And.and(*criteriaList.toTypedArray())
     }
 
     suspend fun updateBalanceIfNecessary(
